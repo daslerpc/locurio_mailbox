@@ -12,16 +12,8 @@
 
 #include <ArduinoJson.h>          //https://github.com/bblanchon/ArduinoJson
 
-
-// Use the WiFi credentials provided below?  If not, use Wifi Manager for configuration
-//bool hardwiredWiFi = false;
-
-//const char* ssid     = "Livebox-8B4C";
-//const char* password = "4AFDAF77557C5A5";
-//const char* mqtt_server = "192.168.1.11";  // This is the local IP of my Mac
-
-//default values, if there are different values in config.json, they are overwritten.
-char mqtt_server[40] = "192.168.1.11";  // This is the local IP of phil's mac at home
+//default values, if there are different values stored in config.json, these are overwritten.
+char mqtt_server[40] = "192.168.1.16";  // This is the local IP of phil's mac at home
 char mqtt_port[6] = "1883";  // this is the default mqtt port
 
 //flag for saving data
@@ -31,6 +23,8 @@ WiFiManager wifiManager;
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
+bool usingMQTT = true;
+
 const char* statusTopic = "Mailbox/status";
 const char* debugTopic = "Mailbox/debug";
 const char* cmdTopic = "Mailbox/toggle_cmd";
@@ -38,13 +32,11 @@ const char* cmdTopic = "Mailbox/toggle_cmd";
 // Current solution - LAWWHF
 // W, O, L, F, S, B, A, N, E, H, O, L, L, O, W
 // 2        5        1        4        0     3  
-
 const int lockCombination[] = {15, 5, 11, 17, 12, 8};
 
 // Relock code - ENABLE
 // W, O, L, F, S, B, A, N,   E,  H, O, L, L, O, W
 //       4        3  2  1   0/5                   
-
 const int resetCombination[] = {3, 4, 5, 6, 9, 3};
 
 String letterPinMapping[2][12] = {
@@ -68,7 +60,7 @@ String letterPinMapping[2][12] = {
                                   "HO(L)LOW",  // 14
                                   "HOL(L)OW",  // 15
                                   "HOLL(O)W",  // 16
-                                  "HOLLO(W)"   // 17
+                                  "HOLLO(W)",   // 17
                                   "ERROR: Unused pin 6, 'Hollow board'", // 18
                                   "ERROR: Unused pin 7, 'Hollow board'", // 19  
                                   "ERROR: Unused pin 8, 'Hollow board'", // 20
@@ -77,7 +69,6 @@ String letterPinMapping[2][12] = {
                                   "ERROR: Unused pin 11, 'Hollow board'", // 23
                                 }
                               };
-
 
 // The 2 capacitive touch boards on the i2c line.
 Adafruit_MPR121 touchBoard[] = { Adafruit_MPR121(), Adafruit_MPR121() };
@@ -92,43 +83,19 @@ uint16_t currtouched[] = {0,0};
 // tracking the progress through the combination
 int currentComboIndex = 0;
 
-// Pin 14 is hardwired as the input for the relay featherwing
-const int relayPin = 14;
+const int relayPin = 14; // Pin 14 is hardwired as the input for the relay featherwing
+const int resetPin = 12; // Pin 12 is a factory reset button for clearing wifi/mqtt data
 
 // Status of the mag-lock
 const bool LOCKED = true;
 const bool UNLOCKED = false;
 bool isLocked = LOCKED;
 
-void setup() {  
-  pinMode(relayPin, OUTPUT);           // set relay pin to output
 
-  Serial.begin(9600);
-  
+void setup_connectivity() {
   setup_fileSystem();
   setup_wifi();
-  
-  mqttClient.setServer(mqtt_server, atoi(mqtt_port));
-  mqttClient.setCallback(processMessage);
-  connectMQTT();
-  
- // checkTouchBoards();
-  setMagnet( LOCKED );
-}
-
-void loop() {
-  /*
-  if (!mqttClient.connected()) {
-    connectMQTT();
-  }
-  mqttClient.loop();
-  
-  processTouchBoard(WOLFSBANE);
-  processTouchBoard(HOLLOW);
-  
-  // put a delay so it isn't overwhelming
-  delay(100);
-  */
+  setup_MQTT();
 }
 
 void setup_fileSystem() {
@@ -169,31 +136,13 @@ void setup_fileSystem() {
 }
 
 void setup_wifi() {
-/*
-  if (hardwiredWiFi) {
-    delay(10);
-    // We start by connecting to a WiFi network
-    Serial.print("Connecting to " + String(ssid));
-  
-    WiFi.begin(ssid, password);
-  
-    int cnt = 0;
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print( "." );
-    }
-  
-    Serial.println();
-    Serial.println("WiFi connected");
-    Serial.println("IP address: " + String(WiFi.localIP()));
-  } else {*/
     // Auto config for Wifi
       
     // The extra parameters to be configured (can be either global or just in the setup)
     // After connecting, parameter.getValue() will get you the configured value
     // id/name placeholder/prompt default length
-    WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
-    WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
+    WiFiManagerParameter custom_mqtt_server("server", "MQTT Server: leave blank if none", mqtt_server, 40);
+    WiFiManagerParameter custom_mqtt_port("port", "MQTT Port", mqtt_port, 6);
 
     //set config save notify callback
     wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -234,7 +183,8 @@ void setup_wifi() {
   
 }
 
-void checkTouchBoards() {
+
+void setup_touchBoards() {
   printDebug("Finding Adafruit MPR121 Capacitive Touch boards"); 
   
   // Default address is 0x5A, if tied to 3.3V its 0x5B
@@ -252,59 +202,8 @@ void checkTouchBoards() {
   printDebug("Touch boards found!");
 }
 
-void connectMQTT() {
-  // Loop until we're reconnected
-  while (!mqttClient.connected()) {
-    Serial.println("Attempting MQTT connection...");
-    // Create a random client ID
-    String clientId = "ESP8266Client-Mailbox";
-    
-    // Attempt to connect
-    if (mqttClient.connect(clientId.c_str())) {
-      Serial.println("connected");
-      
-      // Once connected, publish an announcement...
-      mqttClient.publish(debugTopic, "Mailbox connected to MQTT Broker");
-      
-      // ... and resubscribe
-      mqttClient.subscribe(cmdTopic);
-      
-    } else {
-      String errorMessage = "failed, rc=";
-      errorMessage = errorMessage + mqttClient.state();
-      errorMessage = errorMessage + " try again in 5 seconds";
-      
-      printDebug( errorMessage );
-      
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
-  }
-}
-
-void processTouchBoard( signName checkWord ) {
-   // Get the currently touched pads
-  currtouched[checkWord] = touchBoard[checkWord].touched();
-  
-  for (uint8_t i=0; i<12; i++) {
-    // if it *is* touched and *wasnt* touched before, alert!
-    if ((currtouched[checkWord] & _BV(i)) && !(lasttouched[checkWord] & _BV(i)) ) {
-      printStatus( letterPinMapping[checkWord][i] + " touched." );
-    }
-    
-    // if it *was* touched and now *isnt*, alert!
-    if (!(currtouched[checkWord] & _BV(i)) && (lasttouched[checkWord] & _BV(i)) ) {
-      printStatus( letterPinMapping[checkWord][i] + " released." );
-      processLetter ( checkWord*12 + i );
-    }
-  }
-
-  // reset our state
-  lasttouched[checkWord] = currtouched[checkWord];
-}
 
 void processLetter ( int pressedLetterIndex ) {
-
   int target = -1;
   int numDigits = -1;
 
@@ -363,36 +262,55 @@ void toggleMagnet( ) {
 }
 
 void writeToMagnet( ) {
-  if( isLocked )
+  if( isLocked ) {
     digitalWrite(relayPin, HIGH);
-  else
+    printStatus( "Locking magnet" );
+  }
+  else {
     digitalWrite(relayPin, LOW);
+    printStatus( "Unlocking magnet" );
+  }
 }
 
 void printStatus( String text ) {
   char charBuf[50];
   text.toCharArray(charBuf, 50);
-  mqttClient.publish(statusTopic, charBuf );  
+
+  if( usingMQTT )
+    mqttClient.publish(statusTopic, charBuf );  
+  else
+    Serial.println(charBuf);
+    
 }
 
 void printDebug( String text ) {
   char charBuf[50];
   text.toCharArray(charBuf, 50);
-  mqttClient.publish(debugTopic, charBuf );
+  
+  if( usingMQTT )
+    mqttClient.publish(debugTopic, charBuf );  
+  else
+    Serial.println(charBuf);
 }
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
-  Serial.println("Should save config");
+  Serial.println("Will save config");
   shouldSaveConfig = true;
 }
 
 void factoryReset() {
-  Serial.println("Resetting configuration to default.");
-  printDebug("Resetting configuration to default.");
-  printStatus("Resetting configuration to default.");
+  String message = "Resetting configuration. Connect to Mailbox Wifi Configuration access point to reconfigure.";
+  Serial.println(message);
+  
+  if( usingMQTT ) {
+    printDebug(message);
+    printStatus(message);
+  }
   
   wifiManager.resetSettings();
   SPIFFS.format();
+
+  setup_connectivity();
 }
 
