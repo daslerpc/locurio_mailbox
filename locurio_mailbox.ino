@@ -45,9 +45,6 @@ enum signName {WOLFSBANE, HOLLOW};
 // tracking the progress through the combination
 int currentComboIndex = 0;
 
-const int redLEDPin = 0; // Pin 0 is a red LED
-const int blueLEDPin = 2; // Pin 12 is a blue LED
-const int resetPin = 12; // Pin 12 is a factory reset button for clearing wifi/mqtt data
 const int relayPin = 14; // Pin 14 is hardwired as the input for the relay featherwing
 
 // Status of the mag-lock
@@ -76,7 +73,7 @@ void processLetter ( int pressedLetterIndex ) {
     currentComboIndex += 1;
   }
   else if( pressedLetterIndex == start_letter ) {
-    Serial.println( "Start-letter pressed mid-combo!  Now expecting second letter." );
+    Serial.println( "Start-letter pressed mid-combo!" );
     currentComboIndex = 1;
   }
   else {
@@ -85,13 +82,11 @@ void processLetter ( int pressedLetterIndex ) {
   }
   
   if( currentComboIndex == numDigits ) {
-    Serial.println( "Combination completed, toggling magnet.");
+    Serial.println( "\nCombination completed, toggling magnet.");
     currentComboIndex = 0;
     toggleMagnet( );
-  }
+  } 
 }
-
-
 
 void setMagnet( bool status ) {
   isLocked = status;
@@ -106,11 +101,11 @@ void toggleMagnet( ) {
 void writeLockStateToMagnet( ) {
   if( isLocked ) {
     digitalWrite(relayPin, HIGH);
-    Serial.println( "Locking magnet" );
+    Serial.println( "Locking magnet\n" );
   }
   else {
     digitalWrite(relayPin, LOW);
-    Serial.println( "Unlocking magnet" );
+    Serial.println( "Unlocking magnet\n" );
   }
 }
 
