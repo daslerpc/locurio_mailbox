@@ -80,9 +80,11 @@ void processLetter ( int pressedLetterIndex ) {
     Serial.println( "Incorrect entry!  Combo reset." );
     currentComboIndex = 0;
   }
+
+  Serial.println();
   
   if( currentComboIndex == numDigits ) {
-    Serial.println( "\nCombination completed, toggling magnet.");
+    Serial.println( "Combination completed, toggling magnet.");
     currentComboIndex = 0;
     toggleMagnet( );
   } 
