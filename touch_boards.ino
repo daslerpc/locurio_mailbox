@@ -11,21 +11,21 @@ uint16_t lasttouched[] = {0,0};
 uint16_t currtouched[] = {0,0};
 
 void setup_touchBoards() {
-  printDebug("Finding Adafruit MPR121 Capacitive Touch boards", INFO); 
+  Serial.println("Finding Adafruit MPR121 Capacitive Touch boards"); 
   
   // Default address is 0x5A, if tied to 3.3V its 0x5B
   // If tied to SDA its 0x5C and if SCL then 0x5D
   if (!touchBoard[WOLFSBANE].begin(0x5A)) {
-    printDebug("WOLFSBANE touch board not found, check wiring and reset.", ERROR);
+    Serial.println("WOLFSBANE touch board not found, check wiring and reset.");
     while (1);
   }
 
   if (!touchBoard[HOLLOW].begin(0x5B)) {
-    printDebug("HOLLOW touch board not found, check wiring and reset.", ERROR);
+    Serial.println("HOLLOW touch board not found, check wiring and reset.");
     while (1);
   }
   
-  printDebug("Touch boards found!", INFO);
+  Serial.println("Touch boards found!");
 }
 
 void processTouchBoard( signName checkWord ) {
@@ -35,12 +35,12 @@ void processTouchBoard( signName checkWord ) {
   for (uint8_t i=0; i<12; i++) {
     // if it *is* touched and *wasnt* touched before, alert!
     if ((currtouched[checkWord] & _BV(i)) && !(lasttouched[checkWord] & _BV(i)) ) {
-      printDebug( letterPinMapping[checkWord][i] + " touched.", VERBOSE );
+      Serial.println( letterPinMapping[checkWord][i] + " touched." );
     }
     
     // if it *was* touched and now *isnt*, alert!
     if (!(currtouched[checkWord] & _BV(i)) && (lasttouched[checkWord] & _BV(i)) ) {
-      printDebug( letterPinMapping[checkWord][i] + " released.", INFO );
+      Serial.println( letterPinMapping[checkWord][i] + " released." );
       processLetter ( checkWord*12 + i );
     }
   }

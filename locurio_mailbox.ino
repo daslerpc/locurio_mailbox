@@ -1,43 +1,3 @@
-#include <FS.h>                   //this needs to be first, or it all crashes and burns...
-
-#include <ESP8266WiFi.h>  // For wifi connection
-
-#include <DNSServer.h>        // Local DNS Server used for redirecting all requests to the configuration portal
-#include <ESP8266WebServer.h> // Local WebServer used to serve the configuration portal
-#include <WiFiManager.h>      // https://github.com/tzapu/WiFiManager WiFi Configuration Manager
-
-//default values, if there are different values stored in config.json, these are overwritten.
-char mqtt_server[40] = "192.168.1.16";  // This is the local IP of phil's mac at home
-char mqtt_port[6] = "1883";  // this is the default mqtt port
-
-WiFiManager wifiManager;
-WiFiClient espClient;
-
-bool usingMQTT = true;
-
-enum DebugChannel {
-  VERBOSE,
-  INFO,
-  WARNING,
-  ERROR,
-  NUMBER_OF_DEBUG_CHANNELS
-};
-const char* debug_channels[NUMBER_OF_DEBUG_CHANNELS];
-
-enum OutputChannel {
-  DEVICE_STATUS,
-  EVENT,
-  NUMBER_OF_OUTPUT_CHANNELS
-};
-const char* output_channels[NUMBER_OF_OUTPUT_CHANNELS];
-
-enum CommandChannel {
-  BROADCAST,
-  CONFIG,
-  PRIVATE,
-  NUMBER_OF_COMMAND_CHANNELS
-};
-const char* command_channels[NUMBER_OF_COMMAND_CHANNELS];
 
 // Current solution - LAWWHF
 // W, O, L, F, S, B, A, N, E, H, O, L, L, O, W
@@ -82,12 +42,8 @@ String letterPinMapping[2][12] = {
 
 enum signName {WOLFSBANE, HOLLOW};
 
-
-
-
 // tracking the progress through the combination
 int currentComboIndex = 0;
-
 
 const int redLEDPin = 0; // Pin 0 is a red LED
 const int blueLEDPin = 2; // Pin 12 is a blue LED
@@ -98,20 +54,6 @@ const int relayPin = 14; // Pin 14 is hardwired as the input for the relay feath
 const bool LOCKED = true;
 const bool UNLOCKED = false;
 bool isLocked = LOCKED;
-
-void setup_connectivity() {
-  setup_fileSystem();
-
-  digitalWrite(redLEDPin, HIGH);
-  //setup_wifi();
-  digitalWrite(redLEDPin, LOW);
-  
-  digitalWrite(blueLEDPin, HIGH);
-  setup_MQTT();
-  digitalWrite(blueLEDPin, LOW);
-  
-  sendStartupAlert();
-}
 
 void processLetter ( int pressedLetterIndex ) {
   int target = -1;
@@ -125,25 +67,25 @@ void processLetter ( int pressedLetterIndex ) {
   }
   else {
     target = resetCombination[ currentComboIndex ];
-    start_letter = lockCombination[ 0 ];
+    start_letter = resetCombination[ 0 ];
     numDigits = sizeof(resetCombination)/sizeof(int);
   }
   
   if( pressedLetterIndex == target ) {
-    printDebug( "Combination advanced!", VERBOSE );
+    Serial.println( "Combination advanced!" );
     currentComboIndex += 1;
   }
   else if( pressedLetterIndex == start_letter ) {
-    printDebug( "Start letter pressed mid-combo!  Combo reset to second letter.", WARNING );
+    Serial.println( "Start-letter pressed mid-combo!  Now expecting second letter." );
     currentComboIndex = 1;
   }
   else {
-    printDebug( "Incorrect entry!  Combo reset.", VERBOSE );
+    Serial.println( "Incorrect entry!  Combo reset." );
     currentComboIndex = 0;
   }
   
   if( currentComboIndex == numDigits ) {
-    printDebug( "Combination completed, toggling magnet.", INFO);
+    Serial.println( "Combination completed, toggling magnet.");
     currentComboIndex = 0;
     toggleMagnet( );
   }
@@ -164,29 +106,14 @@ void toggleMagnet( ) {
 void writeLockStateToMagnet( ) {
   if( isLocked ) {
     digitalWrite(relayPin, HIGH);
-    printDebug( "Locking magnet", INFO );
+    Serial.println( "Locking magnet" );
   }
   else {
     digitalWrite(relayPin, LOW);
-    printDebug( "Unlocking magnet", INFO );
+    Serial.println( "Unlocking magnet" );
   }
 }
 
 
 
-
-void factoryReset() {
-  String message = "Performing factory reset of configuration parameters. Connect to Mailbox Wifi Configuration access point to reconfigure.";
-  Serial.println(message);
-  
-  if( usingMQTT ) {
-    printDebug(message, INFO);
-  }
-  
-  wifiManager.resetSettings();
-  SPIFFS.format();
-
-  // For production we want a factory reset to restart the system
-  //ESP.restart();
-}
 

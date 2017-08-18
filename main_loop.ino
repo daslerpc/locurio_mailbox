@@ -9,25 +9,12 @@ void setup() {
   
   Serial.begin(9600);
 
-  // THIS IS FOR TESTING ONLY
-  // Wipe communications credentials
-  //factoryReset(); 
-  
-  setup_connectivity();
-  
   setup_touchBoards();
   setMagnet( LOCKED );
 }
 
 void loop() {
-  
-  if( usingMQTT ) {
-    if (!mqttClient.connected()) {
-      connectMQTT();
-    }
-    mqttClient.loop();
-  }
-  
+
   processTouchBoard(WOLFSBANE);
   processTouchBoard(HOLLOW);
 
