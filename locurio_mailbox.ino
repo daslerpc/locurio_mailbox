@@ -103,7 +103,7 @@ void setup_connectivity() {
   setup_fileSystem();
 
   digitalWrite(redLEDPin, HIGH);
-  setup_wifi();
+  //setup_wifi();
   digitalWrite(redLEDPin, LOW);
   
   digitalWrite(blueLEDPin, HIGH);
